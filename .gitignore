@@ -1,5 +1,15 @@
+# Ignorar archivos de entorno
 .env
 .venv/
 __pycache__/
+
+# Otros archivos temporales
+*.log
+*.sqlite3
+*.zip
+*.csv
 data/
-relaciones_entre_datos.json
+*.pyc
+
+# VS Code
+.vscode/
