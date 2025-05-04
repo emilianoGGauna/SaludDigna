@@ -1,0 +1,5 @@
+.env
+.venv/
+__pycache__/
+data/
+relaciones_entre_datos.json
