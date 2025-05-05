@@ -13,7 +13,7 @@ from typing import Optional, Dict, Any
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sqlalchemy import Engine
+from sqlalchemy.engine import Engine
 
 from DatabaseEDA import DatabaseEDA
 
