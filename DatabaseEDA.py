@@ -109,7 +109,8 @@ class DatabaseEDA:
         :param nrows: If set, uses TOP nrows
         """
         query = f"SELECT TOP {nrows} * FROM [{table_name}]" if nrows else f"SELECT * FROM [{table_name}]"
-        df = pd.read_sql(query, self.engine)
+        from sqlalchemy import text
+        df = pd.read_sql(text(query), self.engine)
         if sample_frac:
             df = df.sample(frac=sample_frac, random_state=42)
         return df.reset_index(drop=True)
