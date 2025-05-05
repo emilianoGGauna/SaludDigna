@@ -1,50 +1,51 @@
+#!/usr/bin/env python3
+# eliminar_todas_menos_dos.py
+
+import logging
 from sqlalchemy import create_engine, text
-import os
 import urllib
-from dotenv import load_dotenv
+from SecretKeys import SecretKeys  # Asegúrate de tener este módulo disponible
 
-# Carga .env
-load_dotenv()
-server   = os.getenv("AZURE_SQL_SERVER")
-database = os.getenv("AZURE_SQL_DATABASE")
-user     = os.getenv("AZURE_SQL_USER")
-pwd      = os.getenv("AZURE_SQL_PASSWORD")
-driver   = os.getenv("AZURE_SQL_DRIVER", "{ODBC Driver 17 for SQL Server}")
+# Configura logs
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 
-# Conexión
+# Obtiene credenciales desde Azure Key Vault
+secrets = SecretKeys()
+server = secrets.get("SERVER")
+database = secrets.get("DATABASE")
+user = secrets.get("USER")
+password = secrets.get("PASSWORD")
+driver = secrets.get("DRIVER") or "{ODBC Driver 17 for SQL Server}"
+
+# Crea la cadena de conexión
 odbc_str = (
     f"DRIVER={driver};"
-    f"SERVER={server};PORT=1433;"
-    f"DATABASE={database};UID={user};PWD={pwd};"
+    f"SERVER={server},1433;"
+    f"DATABASE={database};"
+    f"UID={user};PWD={password};"
     "Encrypt=yes;TrustServerCertificate=no;"
+    "Connection Timeout=30;"
 )
+
 engine = create_engine(f"mssql+pyodbc:///?odbc_connect={urllib.parse.quote_plus(odbc_str)}")
 
-# Construye y ejecuta el DROP dinámico
+# Tablas que quieres conservar
+tablas_a_conservar = [
+    "Datos_Sin_Outliers_con_sentido",
+    "Datos_20Minutos_a_4Horas_con_sentido"
+]
+
+# Elimina todas las tablas excepto las que están en la lista de conservación
 with engine.begin() as conn:
-    sql = """
-    DECLARE @sql NVARCHAR(MAX)=N'';
+    sql = f"""
+    DECLARE @sql NVARCHAR(MAX) = N'';
     SELECT @sql += 'DROP TABLE ' + QUOTENAME(SCHEMA_NAME(schema_id)) + '.' + QUOTENAME(name) + ';'
     FROM sys.tables
-    WHERE name LIKE '%(1)%';
+    WHERE name NOT IN ({','.join(f"'{tbl}'" for tbl in tablas_a_conservar)});
     EXEC sp_executesql @sql;
     """
     conn.execute(text(sql))
-    print("Tablas con '(1)' eliminadas.")
-
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-from sqlalchemy import text
-from utils.upload_to_sql import engine  # o de donde vengas tu engine
-
-# 0) Conexión ya configurada en upload_to_sql.py
-#    engine = create_engine(…)
-print("🔴 Eliminando tabla duplicada 'DescripcionDatos' si existiera…")
-with engine.begin() as conn:
-    conn.execute(text("DROP TABLE IF EXISTS dbo.DescripcionDatos;"))
-print("✅ Tabla duplicada eliminada (si existía).")
-
-# 1) Ahora sigue tu flujo de carga/EDA habitual:
-#    upload_to_sql.main()
-#    db = DatabaseEDA() …etc.
+    logging.info("✅ Se eliminaron todas las tablas excepto las especificadas.")

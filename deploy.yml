@@ -47,7 +47,7 @@ jobs:
 
     # 5) Empaquetar app y copiar a VM via SSH
     - name: Build package
-      run: zip -r app.zip app.py requirements.txt secret_keys.py
+      run: zip -r app.zip app.py requirements.txt SecretKeys.py
 
     - name: Copy package to Azure VM
       uses: appleboy/scp-action@v0.1.4
@@ -76,7 +76,7 @@ jobs:
 
           # Exportar secretos como variables
           for sec in SERVER DATABASE USER PASSWORD DRIVER; do
-            export $sec="${{ steps.keyvault.outputs["$sec"] }}"
+            export $sec="${{ steps.keyvault.outputs[sec] }}"
           done
           export KEY_VAULT_URL="https://${{ env.KEY_VAULT_NAME }}.vault.azure.net/"
 

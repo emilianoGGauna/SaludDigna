@@ -1,132 +1,93 @@
-# app.py
+#!/usr/bin/env python3
+# app_simple.py
 # -*- coding: utf-8 -*-
-"""
-Temporal Data Analyzer – Streamlit UI (Enhanced Flow)
-----------------------------------------------------
-Flujo optimizado:
-1️⃣ Conectar & Seleccionar tabla
-2️⃣ Carga + EDA (gráficas incluidas)
-3️⃣ Visualizar outliers
-4️⃣ Limpiar datos
-5️⃣ Reporte final + Subida
-"""
-
 import streamlit as st
 from sqlalchemy.exc import OperationalError
+
+# IMPORT CORREGIDO: coincide con el nombre de fichero
 from TemporalDataLoader import TemporalDataLoader
-from TemporalOutlierVisualizer import TemporalOutlierVisualizer
-from TemporalCleaner import TemporalCleaner
 from TemporalReport import TemporalReport
+import pandas as pd
 
-# ---------- CONFIGURACIÓN ---------- #
-st.set_page_config(page_title="Temporal Data Analyzer", layout="wide")
-st.title("🕒 Temporal Data Analyzer")
-st.markdown("Sigue el flujo paso a paso: conexión, EDA, outliers, limpieza y reporte final.")
+# ---------- CONFIGURACIÓN DE PÁGINA ---------- #
+st.set_page_config(
+    page_title="Temporal Data Analyzer",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+st.title("🧪 Temporal Data Analyzer")
+st.markdown("Flujo: Selección de tabla → Análisis visual")
 
-# ---------- STATE ---------- #
+# ---------- ESTADO ---------- #
 if "step" not in st.session_state:
     st.session_state.step = 1
-for key in ("raw_df","cleaned_df","cleaning_log","table_name"):
+for key in ("raw_df", "table_name"):
     st.session_state.setdefault(key, None)
 
-# ---------- INICIALIZAR CONEXIÓN ---------- #
+# ---------- CARGAR COMPONENTES ---------- #
 @st.cache_resource(ttl=600)
 def get_loader():
     return TemporalDataLoader()
 
 try:
-    with st.spinner("Verificando conexión a la base de datos…"):
+    with st.spinner("🔌 Conectando a la base de datos..."):
         loader = get_loader()
-    st.success("Conexión exitosa 🎉")
+    st.sidebar.success("Conexión establecida ✅")
 except OperationalError as e:
-    st.error(f"Error de conexión: {e}")
+    st.sidebar.error(f"Error de conexión: {e}")
     st.stop()
 
-visualizer = TemporalOutlierVisualizer()
-cleaner    = TemporalCleaner()
-reporter   = TemporalReport()
+reporter = TemporalReport()
 
-# ---------- NAVEGACIÓN & PROGRESO ---------- #
-steps = ["Selección & EDA","Outliers","Limpieza","Reporte"]
-choice = st.sidebar.radio("Paso", steps, index=st.session_state.step-1)
+# ---------- BARRA LATERAL ---------- #
+st.sidebar.header("Navegación")
+steps = ["Selección & Carga", "Análisis Visual"]
+choice = st.sidebar.radio("Paso actual:", steps, index=st.session_state.step - 1)
 st.session_state.step = steps.index(choice) + 1
-st.progress(int((st.session_state.step-1)/(len(steps)-1)*100))
 
-def nav(prev_step, next_step):
-    c1, c2 = st.columns([1,1])
-    if c1.button("⬅️ Anterior"):
-        st.session_state.step = prev_step
-        st.rerun()
-    if c2.button("Siguiente ➡️"):
-        st.session_state.step = next_step
-        st.rerun()
-
-# ══════════════════════════ #
-# STEP 1 – SELECCIÓN & EDA    #
-# ══════════════════════════ #
-if st.session_state.step == 1:
-    st.header("1️⃣ Selección de Tabla & EDA")
-    table = loader.select_table()
-    if table and st.button("Cargar datos y generar EDA"):
-        with st.spinner("Generando EDA..."):
-            df = loader.load_data(table)
-            st.session_state.raw_df = df
-            st.session_state.table_name = table
-            st.success(f"Tabla '{table}' cargada ({len(df)} filas).")
-    if st.session_state.raw_df is not None:
-        st.subheader("Vista previa")
-        st.dataframe(st.session_state.raw_df.head(), use_container_width=True)
-        st.subheader("📊 EDA completo")
-        loader.visualize_summary(st.session_state.table_name)
-    nav(1, 2)
-
-# ══════════════════════════ #
-# STEP 2 – OUTLIERS          #
-# ══════════════════════════ #
-elif st.session_state.step == 2:
-    st.header("2️⃣ Visualizar Outliers")
-    if st.session_state.raw_df is None:
-        st.warning("Carga primero una tabla en el paso 1."); st.stop()
-    visualizer.plot_all_variable_outliers(st.session_state.raw_df)
-    nav(1, 3)
-
-# ══════════════════════════ #
-# STEP 3 – LIMPIEZA          #
-# ══════════════════════════ #
-elif st.session_state.step == 3:
-    st.header("3️⃣ Limpiar Datos")
-    if st.session_state.raw_df is None:
-        st.warning("Carga primero una tabla en el paso 1."); st.stop()
-    if st.button("Aplicar limpieza"):
-        with st.spinner("Limpiando datos..."):
-            cleaned, log = cleaner.clean_data(st.session_state.raw_df)
-            st.session_state.cleaned_df = cleaned
-            st.session_state.cleaning_log = log
-            st.success("Limpieza completada ✅")
-    if st.session_state.cleaned_df is not None:
-        st.subheader("Previa de datos limpios")
-        st.dataframe(st.session_state.cleaned_df.head(), use_container_width=True)
-    nav(2, 4)
-
-# ══════════════════════════ #
-# STEP 4 – REPORTE FINAL     #
-# ══════════════════════════ #
-elif st.session_state.step == 4:
-    st.header("4️⃣ Reporte Final")
-    if st.session_state.cleaned_df is None:
-        st.warning("Primero ejecuta la limpieza en el paso 3."); st.stop()
-    reporter.show_summary(
-        st.session_state.raw_df,
-        st.session_state.cleaned_df,
-        st.session_state.cleaning_log
-    )
-    nav(3, 4)
-
-# ══════════════════════════ #
-# REINICIAR FLUJO           #
-# ══════════════════════════ #
-st.sidebar.markdown("---")
-if st.sidebar.button("🔄 Reiniciar Flujo"):
-    for k in ("step","raw_df","cleaned_df","cleaning_log","table_name"):
+if st.sidebar.button("🔄 Reiniciar flujo"):
+    for k in ("step", "raw_df", "table_name"):
         st.session_state[k] = None
     st.rerun()
+
+col_prev, col_next = st.columns([1,1])
+def navigate(prev, nxt):
+    if col_prev.button("⬅️ Anterior"):
+        st.session_state.step = prev
+        st.rerun()
+    if col_next.button("➡️ Siguiente"):
+        st.session_state.step = nxt
+        st.rerun()
+
+# ---------- STEP 1: Selección & Carga ---------- #
+if st.session_state.step == 1:
+    st.header("1️⃣ Selección & Carga de Datos")
+    table = loader.select_table()
+    if table:
+        st.session_state.table_name = table
+        if st.button("📥 Cargar datos"):
+            with st.spinner("Cargando datos..."):
+                df = loader.load_data(table, sample_frac=None, nrows=None)
+                st.session_state.raw_df = df
+                st.success(f"'{table}' cargada: {len(df)} filas")
+
+    if st.session_state.raw_df is not None:
+        st.subheader("Vista previa de datos")
+        st.dataframe(st.session_state.raw_df.head(), use_container_width=True)
+        st.subheader("📊 Resumen estadístico")
+        loader.visualize_summary(st.session_state.table_name)
+
+    navigate(1, 2)
+
+# ---------- STEP 2: Análisis Visual ---------- #
+elif st.session_state.step == 2:
+    st.header("2️⃣ Análisis Visual Completo")
+    if st.session_state.raw_df is None:
+        st.warning("Carga primero los datos en el paso 1.")
+    else:
+        reporter.show_summary(
+            original_df=st.session_state.raw_df,
+            cleaned_df=st.session_state.raw_df,
+            cleaning_log=[]
+        )
+    navigate(2, 2)
