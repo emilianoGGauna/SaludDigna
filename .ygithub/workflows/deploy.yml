@@ -3,7 +3,8 @@ name: Deploy Streamlit App to Azure
 on:
   push:
     branches:
-      - main  # Cambia si usas otra rama
+      - main  # Rama principal
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -23,10 +24,15 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    - name: Ensure startup file
+      run: |
+        echo "startup.txt content:"
+        cat startup.txt
+
     - name: Upload to Azure App Service
       uses: azure/webapps-deploy@v2
       with:
-        app-name: sdignaweb  # <- Este debe coincidir con tu nombre en Azure
+        app-name: sdignaweb  # <-- Nombre EXACTO de la App Service en Azure
         slot-name: production
         publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }}
         package: .

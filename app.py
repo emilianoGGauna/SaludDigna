@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# app_simple.py
+# app.py
 # -*- coding: utf-8 -*-
 import streamlit as st
 from sqlalchemy.exc import OperationalError
