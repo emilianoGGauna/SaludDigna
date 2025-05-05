@@ -17,7 +17,8 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 import numpy as np
-from sqlalchemy import create_engine, inspect, Engine
+from sqlalchemy import create_engine, inspect
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from azure.core.exceptions import AzureError
 from SecretKeys import SecretKeys
