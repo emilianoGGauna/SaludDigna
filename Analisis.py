@@ -63,14 +63,14 @@ def plot_combined_panels(df, metrics, category_col='Sucursal', title="Paneles Co
             return "Adulto"
         return "Adulto mayor"
 
-    # Validación de métricas numéricas para correlaciones
+    # Validación de métricas numéricas
     valid_metrics = [col for col in metrics if col in df.columns and pd.api.types.is_numeric_dtype(df[col])]
     if len(valid_metrics) < 2:
         raise ValueError("Se requieren al menos 2 métricas numéricas válidas para el mapa de correlaciones.")
 
-    # Crear figura con 6 filas y 1 columna
+    # Crear figura
     fig = make_subplots(
-        rows=6, cols=1,
+        rows=3, cols=2,
         subplot_titles=[
             "Distribución de Tiempo Total",
             "Espera vs Atención",
@@ -78,17 +78,17 @@ def plot_combined_panels(df, metrics, category_col='Sucursal', title="Paneles Co
             "Mapa de Correlaciones",
             "Media Diaria por Grupo de Edad",
             "% Cumplimiento < 20 minutos"
-        ],
-        vertical_spacing=0.08
+        ]
     )
 
+    # Procesar cada categoría
     cats = df[category_col].dropna().unique()
     for i, cat in enumerate(cats):
         visible = (i == 0)
         color = PALETTE[i % len(PALETTE)]
         sub = df[df[category_col] == cat].copy()
 
-        # 1: Violin plot del tiempo total
+        # === Panel 1: Violin plot del tiempo total ===
         fig.add_trace(go.Violin(
             y=sub['TotalTiempo'], name=cat,
             box_visible=True, meanline_visible=True,
@@ -98,71 +98,110 @@ def plot_combined_panels(df, metrics, category_col='Sucursal', title="Paneles Co
             visible=visible
         ), row=1, col=1)
 
-        # 2: Scatter + tendencia
+        # === Panel 2: Scatter + tendencia ===
         fig.add_trace(go.Scatter(
             x=sub['Minutos de espera'], y=sub['Minutos de atencion'],
             mode='markers', name=f"{cat} puntos",
             marker=dict(size=5, color=color, opacity=0.6),
             visible=visible
-        ), row=2, col=1)
+        ), row=1, col=2)
 
         try:
             trend = px.scatter(sub, x='Minutos de espera', y='Minutos de atencion', trendline='ols').data[1]
             trend.line.color = color
             trend.name = f"{cat} tendencia"
             trend.visible = visible
-            fig.add_trace(trend, row=2, col=1)
+            fig.add_trace(trend, row=1, col=2)
         except Exception:
-            pass
+            pass  # Si no hay suficientes datos para OLS
 
-        # 3: Serie temporal de atención
+        # === Panel 3: Serie temporal de atención ===
         daily = sub.groupby('FechaDT')['Minutos de atencion'].mean().reset_index()
         fig.add_trace(go.Scatter(
-            x=daily['FechaDT'], y=daily['Minutos de atencion'],
-            mode='lines+markers', name=cat,
-            line=dict(color=color, width=3, dash='solid'),
-            marker=dict(size=7, symbol='circle'),
+            x=daily['FechaDT'],
+            y=daily['Minutos de atencion'],
+            mode='lines+markers',
+            name=cat,
+            line=dict(
+                color=color,  # Color diferente
+                width=3,             # Línea más gruesa
+                dash='solid'           # Línea punteada
+            ),
+            marker=dict(
+                size=7,              # Marcadores más grandes
+                symbol='circle'     # Estilo diferente: 'circle', 'square', 'diamond', etc.
+            ),
             visible=visible
-        ), row=3, col=1)
-
-        # 4: Mapa de correlaciones
+        ), row=2, col=1)
+        # === Panel 4: Mapa de correlaciones ===
         corr = sub[valid_metrics].corr().fillna(0)
         fig.add_trace(go.Heatmap(
             z=corr.values, x=valid_metrics, y=valid_metrics,
-            zmin=-1, zmax=1, colorscale=PALETTE,
-            showscale=False, visible=visible
-        ), row=4, col=1)
+            zmin=-1, zmax=1,
+            colorscale=PALETTE,
+            showscale=False,
+            visible=visible
+        ), row=2, col=2)
 
-        # 5: Promedio diario por grupo de edad
+        # === Panel 5: Promedio diario por grupo de edad ===
         sub['GrupoEdad'] = sub['Edad'].apply(clasificar_edad)
         daily_counts = sub.groupby(['FechaDT', 'GrupoEdad']).size().reset_index(name='Conteo')
-        avg_daily = (daily_counts
-                     .groupby('GrupoEdad')['Conteo']
-                     .mean()
-                     .reindex(['Niño/a', 'Joven', 'Adulto', 'Adulto mayor'])
-                     .fillna(0))
+        avg_daily = daily_counts.groupby('GrupoEdad')['Conteo'].mean().reindex(
+            ['Niño/a', 'Joven', 'Adulto', 'Adulto mayor']
+        ).fillna(0)
+
         fig.add_trace(go.Bar(
             x=avg_daily.index, y=avg_daily.values,
             name=f"{cat} - Promedio diario",
             marker=dict(color=color),
             visible=visible
-        ), row=5, col=1)
+        ), row=3, col=1)
 
-        # 6: % cumplimiento < 20min
+        # === Panel 6: % cumplimiento < 20min ===
         cumplimiento = sub.groupby('FechaDT')['Cumple_20min'].mean().reset_index()
         fig.add_trace(go.Scatter(
-            x=cumplimiento['FechaDT'], y=cumplimiento['Cumple_20min'] * 100,
-            mode='lines+markers', name='% Cumple',
-            line=dict(color=color, width=3, dash='solid'),
-            marker=dict(size=7, symbol='square'),
-            visible=visible
-        ), row=6, col=1)
+            x=cumplimiento['FechaDT'],
+            y=cumplimiento['Cumple_20min'] * 100,
+            mode='lines+markers',
+            name='% Cumple',
+            line=dict(
+                color=color,     # Cambia a tu color deseado
+                width=3,                # Grosor de la línea
+                dash='solid'          # Estilo: puedes probar otros
+            ),
+            visible=visible,
+            marker=dict(
+                size=7,              # Marcadores más grandes
+                symbol='square'     # Estilo diferente: 'circle', 'square', 'diamond', etc.
+            )
+        ), row=3, col=2)
 
-    # Ajustes de layout
+    # === Menú desplegable por categoría ===
+    n_traces_per_cat = len(fig.data) // len(cats)
+    buttons = []
+    for i, cat in enumerate(cats):
+        visibility = [False] * len(fig.data)
+        for j in range(n_traces_per_cat):
+            visibility[i * n_traces_per_cat + j] = True
+        buttons.append(dict(
+            label=cat,
+            method="update",
+            args=[{"visible": visibility},
+                  {"title": f"{title} — {cat}"}]
+        ))
+
+    # === Layout final ===
     fig.update_layout(
-        height=300 * 6,  # 300px por fila, ajústalo a tu gusto
-        title_text=title,
-        showlegend=True
+        BASE_LAYOUT,
+        title=f"{title} — {cats[0]}",
+        height=1300,
+        showlegend=False,
+        updatemenus=[dict(
+            buttons=buttons,
+            direction="down",
+            x=0.5, xanchor="center",
+            y=1.18, yanchor="top"
+        )]
     )
 
     return fig
