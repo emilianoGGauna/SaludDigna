@@ -14,24 +14,22 @@ from Analisis import (
 
 app = Flask(__name__)
 
+# Cargar datos
 loader = DataLoader()
 tables = loader.list_tables()
-
 if not tables:
-    import sys
     app.logger.error("No hay tablas disponibles en la base de datos.")
-    sys.exit(1)
+    raise SystemExit(1)
 
 table = tables[0]
 df = loader.load_table(table).copy()
 
-# Preprocessing
+# Preprocesamiento de fechas y tiempos
 df['FechaDT'] = pd.to_datetime(df['Fecha'], format='%Y%m%d', errors='coerce')
 df['InicioEsperaDT'] = pd.to_datetime(df['Hora inicio de espera limpia'], errors='coerce')
 df['InicioAtencionDT'] = pd.to_datetime(df['Hora inicio de atencion'], errors='coerce')
 
 df.dropna(subset=['InicioEsperaDT', 'InicioAtencionDT'], inplace=True)
-
 df['TotalTiempo'] = df['Minutos de espera'] + df['Minutos de atencion']
 df['DiaSemana'] = df['InicioEsperaDT'].dt.day_name()
 
@@ -41,14 +39,35 @@ def home():
 
 @app.route("/plots")
 def render_all_plots():
+    # Generar cada gráfico con configuración responsive
     plots = {
-        "combined_panels": plot_combined_panels(df, ['Minutos de espera', 'Minutos de atencion', 'TotalTiempo']).to_html(full_html=False),
-        "histogram_density": plot_histogram_density(df, 'TotalTiempo', 'Densidad de Tiempo Total').to_html(full_html=False),
-        "facet_histogram": plot_facet_histogram(df, 'Minutos de espera', 'DiaSemana', 'Espera por Día de Semana').to_html(full_html=False),
-        "heatmap": plot_demand_heatmap(df, 'InicioEsperaDT', 'Sucursal', 'Demanda Promedio por Hora y Sucursal').to_html(full_html=False),
-        "avg_demand_line": plot_avg_demand_line(df, 'InicioEsperaDT', 'Sucursal', 'Demanda Promedio por Hora y Sucursal').to_html(full_html=False),
-        "bar_avg_total_time": plot_bar_avg_total_time(df).to_html(full_html=False),
-        "stacked_area": plot_stacked_area_daily_counts(df).to_html(full_html=False)
+        "combined_panels": plot_combined_panels(
+            df, ['Minutos de espera', 'Minutos de atencion', 'TotalTiempo']
+        ).to_html(full_html=False, include_plotlyjs='cdn', config={'responsive': True}),
+
+        "histogram_density": plot_histogram_density(
+            df, 'TotalTiempo', 'Densidad de Tiempo Total'
+        ).to_html(full_html=False, include_plotlyjs='cdn', config={'responsive': True}),
+
+        "facet_histogram": plot_facet_histogram(
+            df, 'Minutos de espera', 'DiaSemana', 'Espera por Día de Semana'
+        ).to_html(full_html=False, include_plotlyjs='cdn', config={'responsive': True}),
+
+        "heatmap": plot_demand_heatmap(
+            df, 'InicioEsperaDT', 'Sucursal', 'Demanda Promedio por Hora y Sucursal'
+        ).to_html(full_html=False, include_plotlyjs='cdn', config={'responsive': True}),
+
+        "avg_demand_line": plot_avg_demand_line(
+            df, 'InicioEsperaDT', 'Sucursal', 'Demanda Promedio por Hora y Sucursal'
+        ).to_html(full_html=False, include_plotlyjs='cdn', config={'responsive': True}),
+
+        "stacked_area": plot_stacked_area_daily_counts(
+            df
+        ).to_html(full_html=False, include_plotlyjs='cdn', config={'responsive': True}),
+
+        "bar_avg_total_time": plot_bar_avg_total_time(
+            df
+        ).to_html(full_html=False, include_plotlyjs='cdn', config={'responsive': True})
     }
     return render_template("plots.html", plots=plots)
 

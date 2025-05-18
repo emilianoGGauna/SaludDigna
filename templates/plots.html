@@ -12,16 +12,17 @@
       --accent2: #B59F7B;
       --radius: 8px;
       --font: "Garamond, serif";
-      --card-padding: 1.5rem;
-      --gap: 1.5rem;
+      --card-padding: 1rem;
+      --gap: 1rem;
       --transition: 0.3s;
     }
 
-    * {
+    *, *::before, *::after {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
     }
+
     body {
       background: var(--bg);
       color: var(--fg);
@@ -31,18 +32,30 @@
       flex-direction: column;
       align-items: center;
     }
+
     header {
       width: 100%;
-      max-width: 800px;
+      max-width: 1200px;
       margin-bottom: var(--gap);
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: var(--gap);
     }
+
     header h1 {
-      font-size: 1.8rem;
+      font-size: 2rem;
       color: var(--accent1);
+      flex: 1 1 auto;
     }
+
+    header nav {
+      display: flex;
+      gap: var(--gap);
+      flex: 0 1 auto;
+    }
+
     header nav a {
       text-decoration: none;
       padding: 0.5rem 1rem;
@@ -52,16 +65,16 @@
       transition: background var(--transition);
       font-size: 0.9rem;
     }
+
     header nav a:hover {
       background: #a0896c;
     }
 
     .plots-container {
-      width: 90vw;
-      max-width: 100%;
-      margin: 0 auto;
-      display: flex;
-      flex-direction: column;
+      width: 100%;
+      max-width: 1200px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: var(--gap);
     }
 
@@ -71,17 +84,52 @@
       border-radius: var(--radius);
       box-shadow: 0 2px 6px rgba(0,0,0,0.05);
       transition: transform var(--transition), box-shadow var(--transition);
+      display: flex;
+      flex-direction: column;
     }
+
     section:hover {
       transform: translateY(-4px);
       box-shadow: 0 6px 12px rgba(0,0,0,0.1);
     }
+
     section h2 {
-      font-size: 1.4rem;
+      font-size: 1.25rem;
       margin-bottom: 0.75rem;
       color: var(--accent1);
       border-bottom: 2px solid var(--accent2);
       padding-bottom: 0.25rem;
+    }
+
+    /* Ensure Plotly iframes are responsive */
+    section .plotly-graph-div,
+    section iframe {
+      width: 100% !important;
+      height: auto !important;
+      min-height: 300px;
+    }
+
+    @media (max-width: 600px) {
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      header h1 {
+        font-size: 1.5rem;
+      }
+
+      .plots-container {
+        grid-template-columns: 1fr;
+      }
+
+      section {
+        padding: 0.75rem;
+      }
+
+      section h2 {
+        font-size: 1.1rem;
+      }
     }
   </style>
 </head>
@@ -89,8 +137,8 @@
   <header>
     <h1>Gráficos de Salud Digna</h1>
     <nav>
-      <a href="/"       class="btn">Inicio</a>
-      <a href="/proposal" class="btn">Propuesta</a>
+      <a href="/">Inicio</a>
+      <a href="/proposal">Propuesta</a>
     </nav>
   </header>
 
