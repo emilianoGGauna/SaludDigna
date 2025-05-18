@@ -93,7 +93,7 @@ class DataLoader:
             "Encrypt=yes;TrustServerCertificate=no;"
         )
         with self.engine.begin() as conn:
-            conn.delete(text(f"DELETE FROM [{table}] WHERE Fecha >= 19800101"))
+            conn.delete(text(f"DELETE FROM [{table}] WHERE Fecha <= 19800101"))
         # Conexión y carga con pyodbc
         conn = pyodbc.connect(odbc_str, timeout=self._timeout)
         try:
