@@ -73,4 +73,4 @@ azureKeyVault.json
 # Datos
 # =====================
 data/
-relaciones_entre_datos.json
+utils/

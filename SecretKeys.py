@@ -66,7 +66,6 @@ class SecretKeys:
             datefmt="%Y-%m-%d %H:%M:%S",
         )
 
-
 # ---------------- Ejemplo standalone ----------------
 if __name__ == "__main__":
     SecretKeys.configure_logging()

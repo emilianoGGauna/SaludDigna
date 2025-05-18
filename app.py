@@ -1,93 +1,56 @@
-#!/usr/bin/env python3
 # app.py
-# -*- coding: utf-8 -*-
-import streamlit as st
-from sqlalchemy.exc import OperationalError
-
-# IMPORT CORREGIDO: coincide con el nombre de fichero
-from TemporalDataLoader import TemporalDataLoader
-from TemporalReport import TemporalReport
+from flask import Flask, render_template
 import pandas as pd
-
-# ---------- CONFIGURACIÓN DE PÁGINA ---------- #
-st.set_page_config(
-    page_title="Temporal Data Analyzer",
-    layout="wide",
-    initial_sidebar_state="expanded"
+from DataLoader import DataLoader
+from Analisis import (
+    plot_combined_panels,
+    plot_histogram_density,
+    plot_facet_histogram,
+    plot_demand_heatmap,
+    plot_avg_demand_line,
+    plot_bar_avg_total_time,
+    plot_stacked_area_daily_counts
 )
-st.title("🧪 Temporal Data Analyzer")
-st.markdown("Flujo: Selección de tabla → Análisis visual")
 
-# ---------- ESTADO ---------- #
-if "step" not in st.session_state:
-    st.session_state.step = 1
-for key in ("raw_df", "table_name"):
-    st.session_state.setdefault(key, None)
+app = Flask(__name__)
 
-# ---------- CARGAR COMPONENTES ---------- #
-@st.cache_resource(ttl=600)
-def get_loader():
-    return TemporalDataLoader()
+loader = DataLoader()
+tables = loader.list_tables()
 
-try:
-    with st.spinner("🔌 Conectando a la base de datos..."):
-        loader = get_loader()
-    st.sidebar.success("Conexión establecida ✅")
-except OperationalError as e:
-    st.sidebar.error(f"Error de conexión: {e}")
-    st.stop()
+if not tables:
+    import sys
+    app.logger.error("No hay tablas disponibles en la base de datos.")
+    sys.exit(1)
 
-reporter = TemporalReport()
+table = tables[0]
+df = loader.load_table(table).copy()
 
-# ---------- BARRA LATERAL ---------- #
-st.sidebar.header("Navegación")
-steps = ["Selección & Carga", "Análisis Visual"]
-choice = st.sidebar.radio("Paso actual:", steps, index=st.session_state.step - 1)
-st.session_state.step = steps.index(choice) + 1
+# Preprocessing
+df['FechaDT'] = pd.to_datetime(df['Fecha'], format='%Y%m%d', errors='coerce')
+df['InicioEsperaDT'] = pd.to_datetime(df['Hora inicio de espera limpia'], errors='coerce')
+df['InicioAtencionDT'] = pd.to_datetime(df['Hora inicio de atencion'], errors='coerce')
 
-if st.sidebar.button("🔄 Reiniciar flujo"):
-    for k in ("step", "raw_df", "table_name"):
-        st.session_state[k] = None
-    st.rerun()
+df.dropna(subset=['InicioEsperaDT', 'InicioAtencionDT'], inplace=True)
 
-col_prev, col_next = st.columns([1,1])
-def navigate(prev, nxt):
-    if col_prev.button("⬅️ Anterior"):
-        st.session_state.step = prev
-        st.rerun()
-    if col_next.button("➡️ Siguiente"):
-        st.session_state.step = nxt
-        st.rerun()
+df['TotalTiempo'] = df['Minutos de espera'] + df['Minutos de atencion']
+df['DiaSemana'] = df['InicioEsperaDT'].dt.day_name()
 
-# ---------- STEP 1: Selección & Carga ---------- #
-if st.session_state.step == 1:
-    st.header("1️⃣ Selección & Carga de Datos")
-    table = loader.select_table()
-    if table:
-        st.session_state.table_name = table
-        if st.button("📥 Cargar datos"):
-            with st.spinner("Cargando datos..."):
-                df = loader.load_data(table, sample_frac=None, nrows=None)
-                st.session_state.raw_df = df
-                st.success(f"'{table}' cargada: {len(df)} filas")
+@app.route("/")
+def home():
+    return render_template("index.html")
 
-    if st.session_state.raw_df is not None:
-        st.subheader("Vista previa de datos")
-        st.dataframe(st.session_state.raw_df.head(), use_container_width=True)
-        st.subheader("📊 Resumen estadístico")
-        loader.visualize_summary(st.session_state.table_name)
+@app.route("/plots")
+def render_all_plots():
+    plots = {
+        "combined_panels": plot_combined_panels(df, ['Minutos de espera', 'Minutos de atencion', 'TotalTiempo']).to_html(full_html=False),
+        "histogram_density": plot_histogram_density(df, 'TotalTiempo', 'Densidad de Tiempo Total').to_html(full_html=False),
+        "facet_histogram": plot_facet_histogram(df, 'Minutos de espera', 'DiaSemana', 'Espera por Día de Semana').to_html(full_html=False),
+        "heatmap": plot_demand_heatmap(df, 'InicioEsperaDT', 'Sucursal', 'Demanda Promedio por Hora y Sucursal').to_html(full_html=False),
+        "avg_demand_line": plot_avg_demand_line(df, 'InicioEsperaDT', 'Sucursal', 'Demanda Promedio por Hora y Sucursal').to_html(full_html=False),
+        "bar_avg_total_time": plot_bar_avg_total_time(df).to_html(full_html=False),
+        "stacked_area": plot_stacked_area_daily_counts(df).to_html(full_html=False)
+    }
+    return render_template("plots.html", plots=plots)
 
-    navigate(1, 2)
-
-# ---------- STEP 2: Análisis Visual ---------- #
-elif st.session_state.step == 2:
-    st.header("2️⃣ Análisis Visual Completo")
-    if st.session_state.raw_df is None:
-        st.warning("Carga primero los datos en el paso 1.")
-    else:
-        reporter.show_summary(
-            original_df=st.session_state.raw_df,
-            cleaned_df=st.session_state.raw_df,
-            cleaning_log=[]
-        )
-    navigate(2, 2)
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)

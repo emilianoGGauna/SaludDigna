@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Salud Digna — Gráficos</title>
+  <style>
+    :root {
+      --bg: #FAF8F0;
+      --fg: #1B3B36;
+      --accent1: #597D72;
+      --accent2: #B59F7B;
+      --radius: 8px;
+      --font: "Garamond, serif";
+      --card-padding: 1.5rem;
+      --gap: 1.5rem;
+      --transition: 0.3s;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font);
+      padding: var(--gap);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    header {
+      width: 100%;
+      max-width: 800px;
+      margin-bottom: var(--gap);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 {
+      font-size: 1.8rem;
+      color: var(--accent1);
+    }
+    header nav a {
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      background: var(--accent2);
+      color: #fff;
+      border-radius: var(--radius);
+      transition: background var(--transition);
+      font-size: 0.9rem;
+    }
+    header nav a:hover {
+      background: #a0896c;
+    }
+
+    .plots-container {
+      width: 90vw;
+      max-width: 100%;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+    }
+
+    section {
+      background: #fff;
+      padding: var(--card-padding);
+      border-radius: var(--radius);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+      transition: transform var(--transition), box-shadow var(--transition);
+    }
+    section:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+    }
+    section h2 {
+      font-size: 1.4rem;
+      margin-bottom: 0.75rem;
+      color: var(--accent1);
+      border-bottom: 2px solid var(--accent2);
+      padding-bottom: 0.25rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Gráficos de Salud Digna</h1>
+    <nav>
+      <a href="/"       class="btn">Inicio</a>
+      <a href="/proposal" class="btn">Propuesta</a>
+    </nav>
+  </header>
+
+  <div class="plots-container">
+    <section id="combined-panels">
+      <h2>Panel Combinado</h2>
+      {{ plots['combined_panels'] | safe }}
+    </section>
+
+    <section id="histogram-density">
+      <h2>Densidad de Histograma</h2>
+      {{ plots['histogram_density'] | safe }}
+    </section>
+
+    <section id="facet-histogram">
+      <h2>Histograma por Día de la Semana</h2>
+      {{ plots['facet_histogram'] | safe }}
+    </section>
+
+    <section id="heatmap">
+      <h2>Mapa de Calor de Demanda</h2>
+      {{ plots['heatmap'] | safe }}
+    </section>
+
+    <section id="avg-demand-line">
+      <h2>Demanda Promedio por Hora</h2>
+      {{ plots['avg_demand_line'] | safe }}
+    </section>
+
+    <section id="stacked-area">
+      <h2>Pacientes Diarios por Sucursal</h2>
+      {{ plots['stacked_area'] | safe }}
+    </section>
+
+    <section id="bar-avg-total-time">
+      <h2>Tiempo Total Promedio por Sucursal</h2>
+      {{ plots['bar_avg_total_time'] | safe }}
+    </section>
+  </div>
+</body>
+</html>

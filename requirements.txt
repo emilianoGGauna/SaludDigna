@@ -11,12 +11,12 @@ sqlalchemy>=1.4.0,<2.0.0
 pymysql
 pyodbc
 
-# --- Embeddings / ML ---
+# --- ML ---
 sentence-transformers>=2.2.0,<3.0.0
 torch
 tqdm
 
-# --- Google Drive / Sheets ---
+# --- Google ---
 gspread>=5.0.0,<6.0.0
 google-auth>=2.0.0,<3.0.0
 google-auth-oauthlib>=0.5.0,<1.0.0
@@ -28,6 +28,6 @@ matplotlib
 scipy
 plotly
 
-# --- Configuración / utilidades ---
+# --- App ---
+flask
 python-dotenv
-streamlit

@@ -1,43 +1,21 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-upload_to_sql.py
+# upload_to_sql.py — Versión que elimina todas las tablas antes de subir nuevas
 
-Carga archivos CSV y Excel desde la carpeta `data/` hacia Azure SQL Database.
-
-Variables de entorno (archivo .env en la raíz):
-  AZURE_SQL_SERVER   - Ej: sdigna.database.windows.net
-  AZURE_SQL_DATABASE - Nombre de la BD (ej: SaludDigna)
-  AZURE_SQL_USER     - Usuario SQL
-  AZURE_SQL_PASSWORD - Password del usuario
-  AZURE_SQL_DRIVER   - Opcional, por defecto '{ODBC Driver 17 for SQL Server}'
-
-Dependencias:
-  pandas, sqlalchemy, pyodbc, python-dotenv, openpyxl
-
-Uso:
-  python upload_to_sql.py
-"""
 import os
 import glob
 import pandas as pd
-from dotenv import load_dotenv
 import urllib
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
+from SecretKeys import SecretKeys
 
-# 1. Cargar variables de entorno
-load_dotenv()
-server   = os.getenv("AZURE_SQL_SERVER")
-database = os.getenv("AZURE_SQL_DATABASE")
-user     = os.getenv("AZURE_SQL_USER")
-password = os.getenv("AZURE_SQL_PASSWORD")
-driver   = os.getenv("AZURE_SQL_DRIVER", "{ODBC Driver 17 for SQL Server}")
-
-# Verificar variables esenciales
-if not all([server, database, user, password]):
-    print("❌ Faltan variables de entorno. Define AZURE_SQL_SERVER, AZURE_SQL_DATABASE, AZURE_SQL_USER y AZURE_SQL_PASSWORD en .env")
-    exit(1)
+# 1. Obtener secretos desde Azure Key Vault
+sk = SecretKeys()
+server = sk.get("SERVER")
+database = sk.get("DATABASE")
+user = sk.get("USER")
+password = sk.get("PASSWORD")
+driver = sk.get("DRIVER") or "{ODBC Driver 17 for SQL Server}"
 
 # 2. Crear engine SQLAlchemy
 odbc_str = (
@@ -51,7 +29,7 @@ params = urllib.parse.quote_plus(odbc_str)
 engine = create_engine(f"mssql+pyodbc:///?odbc_connect={params}", fast_executemany=True)
 inspector = inspect(engine)
 
-# 3. Detectar archivos en data/
+# 3. Cargar archivos de la carpeta ./data
 data_dir = os.path.join(os.getcwd(), "data")
 patterns = ["*.csv", "*.xls", "*.xlsx"]
 files = []
@@ -59,10 +37,10 @@ for pat in patterns:
     files.extend(glob.glob(os.path.join(data_dir, pat)))
 
 if not files:
-    print(f"No se encontraron archivos en {data_dir}")
+    print(f"❌ No se encontraron archivos en {data_dir}")
     exit(0)
 
-# 4. Función para cargar DataFrame según extensión
+# 4. Cargar archivos según extensión
 def load_dataframe(path: str) -> pd.DataFrame:
     ext = os.path.splitext(path)[1].lower()
     if ext == ".csv":
@@ -70,42 +48,47 @@ def load_dataframe(path: str) -> pd.DataFrame:
     else:
         return pd.read_excel(path, engine="openpyxl")
 
-# 5. Procesar cada archivo
+# 5. Eliminar todas las tablas de la base de datos
+def delete_all_tables():
+    print("⚠️ Eliminando todas las tablas existentes en la base de datos...")
+    try:
+        with engine.begin() as conn:
+            tables = inspector.get_table_names()
+            for tbl in tables:
+                print(f"   🗑️ Eliminando tabla: {tbl}")
+                conn.execute(text(f"DROP TABLE [{tbl}]"))
+        print("✅ Todas las tablas fueron eliminadas.")
+    except SQLAlchemyError as e:
+        print(f"❌ Error al eliminar tablas: {e}")
+        exit(1)
+
+# 6. Proceso principal
 def main():
+    delete_all_tables()
+
     for path in files:
         base = os.path.basename(path)
         table_name = os.path.splitext(base)[0].replace(" ", "_")
-        print(f"\n➡️ Procesando archivo '{base}' → tabla '{table_name}'...")
+        print(f"\n➡️ Subiendo archivo '{base}' → tabla '{table_name}'...")
 
-        # 5.1 Verificar existencia de tabla
-        try:
-            if inspector.has_table(table_name):
-                print(f"   ⚠️ La tabla '{table_name}' ya existe. Se omite.")
-                continue
-        except SQLAlchemyError as e:
-            print(f"   ❌ Error al comprobar existencia de tabla: {e}")
-            continue
-
-        # 5.2 Cargar datos al DataFrame
         try:
             df = load_dataframe(path)
         except Exception as e:
             print(f"   ❌ Error al leer el archivo: {e}")
             continue
 
-        # 5.3 Crear tabla en SQL Server
         try:
             df.to_sql(
                 name=table_name,
                 con=engine,
-                if_exists="fail",  # fallará si existe
+                if_exists="fail",
                 index=False
             )
             print(f"   ✅ Tabla '{table_name}' creada con {len(df)} filas.")
         except SQLAlchemyError as e:
             print(f"   ❌ Error al crear la tabla '{table_name}': {e}")
 
-    print("\n🎉 ¡Proceso completado!")
+    print("\n🎉 ¡Carga finalizada! Todas las tablas anteriores fueron eliminadas y se subieron los nuevos archivos.")
 
 if __name__ == "__main__":
     main()
