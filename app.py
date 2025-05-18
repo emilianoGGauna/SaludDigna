@@ -1,6 +1,5 @@
 # app.py
 from flask import Flask, render_template
-import pandas as pd
 from DataLoader import DataLoader
 from Analisis import (
     plot_combined_panels,
@@ -14,21 +13,21 @@ from Analisis import (
 
 app = Flask(__name__)
 
-# Cargar y preprocesar datos automáticamente
-dloader = DataLoader(min_fecha=19800101)
+# Instanciar DataLoader y precargar datos con filtrado y preprocesamiento
+loader = DataLoader(min_fecha=19800101)
 tables = loader.list_tables()
 if not tables:
     app.logger.error("No hay tablas disponibles en la base de datos.")
     raise SystemExit(1)
 
-df = loader.load_table(tables[0])  # Ya incluye filtro y preprocesamiento
+df = loader.load_table(tables[0])
 
 @app.route("/")
 def home():
     return render_template("index.html")
+
 @app.route("/plots")
 def render_all_plots():
-    # Generar cada gráfico con configuración responsive
     plots = {
         "combined_panels": plot_combined_panels(
             df, ['Minutos de espera', 'Minutos de atencion', 'TotalTiempo']
@@ -61,4 +60,5 @@ def render_all_plots():
     return render_template("plots.html", plots=plots)
 
 if __name__ == "__main__":
+    # Para entorno de desarrollo
     app.run(debug=True, host="0.0.0.0", port=5000)
