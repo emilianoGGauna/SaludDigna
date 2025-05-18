@@ -14,29 +14,18 @@ from Analisis import (
 
 app = Flask(__name__)
 
-# Cargar datos
-loader = DataLoader()
+# Cargar y preprocesar datos automáticamente
+dloader = DataLoader(min_fecha=19800101)
 tables = loader.list_tables()
 if not tables:
     app.logger.error("No hay tablas disponibles en la base de datos.")
     raise SystemExit(1)
 
-table = tables[0]
-df = loader.load_table(table).copy()
-
-# Preprocesamiento de fechas y tiempos
-df['FechaDT'] = pd.to_datetime(df['Fecha'], format='%Y%m%d', errors='coerce')
-df['InicioEsperaDT'] = pd.to_datetime(df['Hora inicio de espera limpia'], errors='coerce')
-df['InicioAtencionDT'] = pd.to_datetime(df['Hora inicio de atencion'], errors='coerce')
-
-df.dropna(subset=['InicioEsperaDT', 'InicioAtencionDT'], inplace=True)
-df['TotalTiempo'] = df['Minutos de espera'] + df['Minutos de atencion']
-df['DiaSemana'] = df['InicioEsperaDT'].dt.day_name()
+df = loader.load_table(tables[0])  # Ya incluye filtro y preprocesamiento
 
 @app.route("/")
 def home():
     return render_template("index.html")
-
 @app.route("/plots")
 def render_all_plots():
     # Generar cada gráfico con configuración responsive

@@ -1,3 +1,4 @@
+# DataLoader.py
 import logging
 import re
 import urllib
@@ -18,9 +19,15 @@ logging.basicConfig(level=logging.INFO, format=default_format)
 logger = logging.getLogger(__name__)
 
 class DataLoader:
-    def __init__(self, secret_prefix: str = "", connect_timeout: int = 30):
+    def __init__(
+        self,
+        secret_prefix: str = "",
+        connect_timeout: int = 30,
+        min_fecha: int = 19800101
+    ):
         self._secrets = SecretKeys()
         prefix = f"{secret_prefix}_" if secret_prefix else ""
+        self.min_fecha = min_fecha
 
         # Verificar credenciales de Azure Key Vault
         try:
@@ -75,13 +82,13 @@ class DataLoader:
         nrows: Optional[int] = None,
         sample_frac: Optional[float] = None
     ) -> pd.DataFrame:
-        """Carga datos de una tabla específica (solo desde 1980) usando pyodbc puro."""
-        # Construir consulta con filtro numérico en Fecha
+        """Carga datos de una tabla específica, aplica filtrado y preprocesamiento estándar."""
+        # Construir consulta con filtro mínimo de fecha
         top_clause = f"TOP {nrows}" if nrows else ""
         query = (
             f"SELECT {top_clause} * "
             f"FROM [{table}] "
-            f"WHERE Fecha >= 19800101"
+            f"WHERE Fecha >= {self.min_fecha}"
         )
 
         # Cadena ODBC para pyodbc
@@ -93,7 +100,7 @@ class DataLoader:
             "Encrypt=yes;TrustServerCertificate=no;"
         )
 
-        # Conexión y carga con pyodbc
+        # Conexión y carga
         conn = pyodbc.connect(odbc_str, timeout=self._timeout)
         try:
             df = pd.read_sql(query, con=conn)
@@ -103,5 +110,22 @@ class DataLoader:
         # Muestreo opcional
         if sample_frac and 0 < sample_frac < 1:
             df = df.sample(frac=sample_frac, random_state=42)
+
+        # ----------------------------
+        # Preprocesamiento estándar
+        # ----------------------------
+        # Convertir Fecha a datetime y aplicar filtro nuevamente como seguridad
+        df['FechaDT'] = pd.to_datetime(df['Fecha'], format='%Y%m%d', errors='coerce')
+        df = df[df['FechaDT'] >= pd.to_datetime(str(self.min_fecha), format='%Y%m%d')]
+        df.dropna(subset=['FechaDT'], inplace=True)
+
+        # Convertir horas de espera y atención
+        df['InicioEsperaDT'] = pd.to_datetime(df['Hora inicio de espera limpia'], errors='coerce')
+        df['InicioAtencionDT'] = pd.to_datetime(df['Hora inicio de atencion'], errors='coerce')
+        df.dropna(subset=['InicioEsperaDT', 'InicioAtencionDT'], inplace=True)
+
+        # Calcular total de tiempo y día de la semana
+        df['TotalTiempo'] = df['Minutos de espera'] + df['Minutos de atencion']
+        df['DiaSemana'] = df['InicioEsperaDT'].dt.day_name()
 
         return df.reset_index(drop=True)
