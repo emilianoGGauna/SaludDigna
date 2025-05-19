@@ -11,6 +11,9 @@ from Analisis import (
     plot_bar_avg_total_time,
     plot_stacked_area_daily_counts
 )
+from Model import load_and_preprocess, build_figure
+from flask import request
+import plotly.io as pio
 
 app = Flask(__name__)
 
@@ -51,6 +54,32 @@ def render_all_plots():
         "stacked_area": plot_stacked_area_daily_counts(df).to_html(full_html=False)
     }
     return render_template("plots.html", plots=plots)
+
+@app.route('/proposal', methods=['GET', 'POST'])
+def proposal():
+    # Valores por defecto
+    t_cost_full = 150.0
+    t_cost_part = 90.0
+    t_capacity = 10
+
+    if request.method == 'POST':
+        t_cost_full = float(request.form.get('t_cost_full', 150.0))
+        t_cost_part = float(request.form.get('t_cost_part', 90.0))
+        t_capacity = int(request.form.get('t_capacity', 10))
+
+    try:
+        df_model = load_and_preprocess()
+    except ValueError as e:
+        return f"<h2>Error en la carga de datos: {str(e)}</h2>", 500
+
+    fig = build_figure(df_model, t_cost_full, t_cost_part, t_capacity)
+    plot_html = pio.to_html(fig, full_html=False)
+
+    return render_template('proposal.html',
+                           plot_html=plot_html,
+                           t_cost_full=t_cost_full,
+                           t_cost_part=t_cost_part,
+                           t_capacity=t_capacity)
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
