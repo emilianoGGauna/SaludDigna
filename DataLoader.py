@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 from azure.core.exceptions import AzureError
-from sqlalchemy import text
+
 from SecretKeys import SecretKeys
 
 # Configura el logging
@@ -39,7 +39,6 @@ class DataLoader:
         # Motor para inspección de tablas
         self.engine: Engine = self._create_engine()
         self.inspector = inspect(self.engine)
-        self.min_fecha = 19800101
 
     def _create_engine(self) -> Engine:
         odbc = (
@@ -76,24 +75,15 @@ class DataLoader:
         nrows: Optional[int] = None,
         sample_frac: Optional[float] = None
     ) -> pd.DataFrame:
-        """Carga datos de una tabla específica, purgando primero las filas con Fecha < min_fecha."""
-        # 1) Purga filas directamente en la BD
-        try:
-            delete_stmt = text(f"DELETE FROM [{table}] WHERE Fecha < :min_fecha")
-            with self.engine.begin() as conn:
-                conn.execute(delete_stmt, {"min_fecha": self.min_fecha})
-            logger.info("Se purgaron filas antiguas de %s.<%s>", table, self.min_fecha)
-        except Exception as e:
-            logger.warning("Error al purgar filas de %s: %s", table, e)
-
-        # 2) Construir y ejecutar la consulta filtrada
+        """Carga datos de una tabla específica (solo desde 1980) usando pyodbc puro."""
+        # Construir consulta con filtro numérico en Fecha
         top_clause = f"TOP {nrows}" if nrows else ""
         query = (
             f"SELECT {top_clause} * "
             f"FROM [{table}] "
-            f"WHERE Fecha >= {self.min_fecha}"
         )
 
+        # Cadena ODBC para pyodbc
         odbc_str = (
             f"DRIVER={self._driver};"
             f"SERVER={self._server},1433;"
@@ -101,13 +91,15 @@ class DataLoader:
             f"UID={self._user};PWD={self._password};"
             "Encrypt=yes;TrustServerCertificate=no;"
         )
+
+        # Conexión y carga con pyodbc
         conn = pyodbc.connect(odbc_str, timeout=self._timeout)
         try:
             df = pd.read_sql(query, con=conn)
         finally:
             conn.close()
 
-        # 3) Muestreo opcional
+        # Muestreo opcional
         if sample_frac and 0 < sample_frac < 1:
             df = df.sample(frac=sample_frac, random_state=42)
 
