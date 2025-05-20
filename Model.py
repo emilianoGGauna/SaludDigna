@@ -72,8 +72,11 @@ def optimize_staff(demand, full_shifts, part_shifts, cost_full, cost_part, capac
 def build_figure(df, cost_full, cost_part, capacity):
     branches = sorted(df['SUCURSAL'].unique())
     fig = make_subplots(
-        rows=2, cols=1, shared_xaxes=True,
-        subplot_titles=('Empleados vs Pacientes', 'Costos por Hora')
+        rows=3, cols=1, shared_xaxes=True,
+        subplot_titles=('Empleados vs Pacientes', 'Costos por Hora', 'Tabla de empleados por hora'),
+        row_heights=[0.33, 0.33, 0.34],
+        vertical_spacing=0.1,
+        specs=[[{}], [{}], [{'type': 'table'}]]
     )
 
     all_vis = []
@@ -114,6 +117,13 @@ def build_figure(df, cost_full, cost_part, capacity):
                     cov_pt[h] += n * capacity
                     cost_pt[h] += n * cost_part
 
+        empleados_por_hora = pd.DataFrame({
+            'Hora': avg.index,
+            'FT Empleados': (cov_ft / capacity).astype(int),
+            'PT Empleados': (cov_pt / capacity).astype(int),
+            'Total Empleados': ((cov_ft + cov_pt) / capacity).astype(int)
+        })
+
         # Agregar trazas al gráfico
         fig.add_trace(
             go.Bar(x=avg.index, y=cov_ft / capacity, name='FT Empleados',
@@ -145,7 +155,26 @@ def build_figure(df, cost_full, cost_part, capacity):
             row=2, col=1
         )
 
-        all_vis.extend([True] * 6 if branch == branches[0] else [False] * 6)
+        all_vis.extend([True] * 7 if branch == branches[0] else [False] * 7)
+
+        fig.add_trace(
+            go.Table(
+                header=dict(
+                    values=list(empleados_por_hora.columns),
+                    fill_color=PALETTE[0],
+                    font=dict(color='white'),
+                    align='center'
+                ),
+                cells=dict(
+                    values=[empleados_por_hora[col] for col in empleados_por_hora.columns],
+                    fill_color=BG_COLOR,
+                    align='center'
+                ),
+                visible=(branch == branches[0])
+            ),
+            row=3, col=1
+        )
+
 
     # Configurar visibilidad inicial
     for i, trace in enumerate(fig.data):
@@ -155,12 +184,13 @@ def build_figure(df, cost_full, cost_part, capacity):
     buttons = []
     for bi, branch in enumerate(branches):
         vis = [False] * len(fig.data)
-        for j in range(bi * 6, bi * 6 + 6):
+        for j in range(bi * 7, bi * 7 + 7):
             vis[j] = True
         buttons.append(dict(
             label=branch,
             method='update',
             args=[{'visible': vis}, {'title.text': f'Demanda & Optimización — {branch}'}]
+            
         ))
 
     fig.update_layout(
