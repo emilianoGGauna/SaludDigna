@@ -33,7 +33,8 @@ class DataLoader:
         self._database = self._secrets.get(prefix + "DATABASE")
         self._user = self._secrets.get(prefix + "USER")
         self._password = self._secrets.get(prefix + "PASSWORD")
-        self._driver =  "{ODBC Driver 17 for SQL Server}"
+        self._driver = self._secrets.get(prefix + "DRIVER") or "{ODBC Driver 17 for SQL Server}"
+
         self._timeout = connect_timeout
 
         # Motor para inspección de tablas
@@ -75,10 +76,15 @@ class DataLoader:
         nrows: Optional[int] = None,
         sample_frac: Optional[float] = None
     ) -> pd.DataFrame:
-        """Carga datos de una tabla de SQL Server usando pyodbc."""
+        """Carga datos de una tabla específica (solo desde 1980) usando pyodbc puro."""
+        # Construir consulta con filtro numérico en Fecha
         top_clause = f"TOP {nrows}" if nrows else ""
-        query = f"SELECT {top_clause} * FROM [{table}]"
+        query = (
+            f"SELECT {top_clause} * "
+            f"FROM [{table}] "
+        )
 
+        # Cadena ODBC para pyodbc
         odbc_str = (
             f"DRIVER={self._driver};"
             f"SERVER={self._server},1433;"
@@ -99,5 +105,6 @@ class DataLoader:
                 df = df.sample(frac=sample_frac, random_state=42)
             else:
                 logger.warning("sample_frac debe estar entre 0 y 1. Valor ignorado.")
+
 
         return df.reset_index(drop=True)
