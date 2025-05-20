@@ -1,15 +1,80 @@
-# Ignorar archivos de entorno
-.env
-.venv/
-__pycache__/
+# =====================
+# Sistema operativo
+# =====================
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+# Icon?
+Icon?
+# Linux
+*~
 
-# Otros archivos temporales
+# =====================
+# Python
+# =====================
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entornos virtuales
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Distribuciones
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs y bases de datos
 *.log
 *.sqlite3
-*.zip
-*.csv
-data/
-*.pyc
 
+# Archivos temporales
+*.tmp
+*.swp
+*~
+*.cache/
+*.bak
+*.backup
+*.zip
+*.tar.gz
+*.csv
+
+# =====================
+# Claves y secretos
+# =====================
+sdignamv_key_0504.pem
+.env
+SecretKeys.py   # si tiene secretos embebidos
+# Azure Key Vault config (si lo usases)
+azureKeyVault.json
+
+# =====================
+# IDEs y editores
+# =====================
 # VS Code
 .vscode/
+# JetBrains
+.idea/
+*.iml
+
+# =====================
+# Datos
+# =====================
+data/
+
+# =====================
+# Utilidades
+# =====================
+utils/

@@ -1,132 +1,85 @@
 # app.py
-# -*- coding: utf-8 -*-
-"""
-Temporal Data Analyzer – Streamlit UI (Enhanced Flow)
-----------------------------------------------------
-Flujo optimizado:
-1️⃣ Conectar & Seleccionar tabla
-2️⃣ Carga + EDA (gráficas incluidas)
-3️⃣ Visualizar outliers
-4️⃣ Limpiar datos
-5️⃣ Reporte final + Subida
-"""
+from flask import Flask, render_template
+import pandas as pd
+from DataLoader import DataLoader
+from Analisis import (
+    plot_combined_panels,
+    plot_histogram_density,
+    plot_facet_histogram,
+    plot_demand_heatmap,
+    plot_avg_demand_line,
+    plot_bar_avg_total_time,
+    plot_stacked_area_daily_counts
+)
+from Model import load_and_preprocess, build_figure
+from flask import request
+import plotly.io as pio
 
-import streamlit as st
-from sqlalchemy.exc import OperationalError
-from TemporalDataLoader import TemporalDataLoader
-from TemporalOutlierVisualizer import TemporalOutlierVisualizer
-from TemporalCleaner import TemporalCleaner
-from TemporalReport import TemporalReport
+app = Flask(__name__)
 
-# ---------- CONFIGURACIÓN ---------- #
-st.set_page_config(page_title="Temporal Data Analyzer", layout="wide")
-st.title("🕒 Temporal Data Analyzer")
-st.markdown("Sigue el flujo paso a paso: conexión, EDA, outliers, limpieza y reporte final.")
+loader = DataLoader()
+tables = loader.list_tables()
 
-# ---------- STATE ---------- #
-if "step" not in st.session_state:
-    st.session_state.step = 1
-for key in ("raw_df","cleaned_df","cleaning_log","table_name"):
-    st.session_state.setdefault(key, None)
+if not tables:
+    import sys
+    app.logger.error("No hay tablas disponibles en la base de datos.")
+    sys.exit(1)
 
-# ---------- INICIALIZAR CONEXIÓN ---------- #
-@st.cache_resource(ttl=600)
-def get_loader():
-    return TemporalDataLoader()
+table = tables[0]
+df = loader.load_table(table).copy()
 
-try:
-    with st.spinner("Verificando conexión a la base de datos…"):
-        loader = get_loader()
-    st.success("Conexión exitosa 🎉")
-except OperationalError as e:
-    st.error(f"Error de conexión: {e}")
-    st.stop()
+# Preprocessing
+df['FechaDT'] = pd.to_datetime(df['Fecha'], format='%Y%m%d', errors='coerce')
+df['InicioEsperaDT'] = pd.to_datetime(df['Hora inicio de espera limpia'], errors='coerce')
+df['InicioAtencionDT'] = pd.to_datetime(df['Hora inicio de atencion'], errors='coerce')
 
-visualizer = TemporalOutlierVisualizer()
-cleaner    = TemporalCleaner()
-reporter   = TemporalReport()
+df.dropna(subset=['InicioEsperaDT', 'InicioAtencionDT'], inplace=True)
 
-# ---------- NAVEGACIÓN & PROGRESO ---------- #
-steps = ["Selección & EDA","Outliers","Limpieza","Reporte"]
-choice = st.sidebar.radio("Paso", steps, index=st.session_state.step-1)
-st.session_state.step = steps.index(choice) + 1
-st.progress(int((st.session_state.step-1)/(len(steps)-1)*100))
+df['TotalTiempo'] = df['Minutos de espera'] + df['Minutos de atencion']
+df['DiaSemana'] = df['InicioEsperaDT'].dt.day_name()
 
-def nav(prev_step, next_step):
-    c1, c2 = st.columns([1,1])
-    if c1.button("⬅️ Anterior"):
-        st.session_state.step = prev_step
-        st.rerun()
-    if c2.button("Siguiente ➡️"):
-        st.session_state.step = next_step
-        st.rerun()
+@app.route("/")
+def home():
+    return render_template("index.html")
 
-# ══════════════════════════ #
-# STEP 1 – SELECCIÓN & EDA    #
-# ══════════════════════════ #
-if st.session_state.step == 1:
-    st.header("1️⃣ Selección de Tabla & EDA")
-    table = loader.select_table()
-    if table and st.button("Cargar datos y generar EDA"):
-        with st.spinner("Generando EDA..."):
-            df = loader.load_data(table)
-            st.session_state.raw_df = df
-            st.session_state.table_name = table
-            st.success(f"Tabla '{table}' cargada ({len(df)} filas).")
-    if st.session_state.raw_df is not None:
-        st.subheader("Vista previa")
-        st.dataframe(st.session_state.raw_df.head(), use_container_width=True)
-        st.subheader("📊 EDA completo")
-        loader.visualize_summary(st.session_state.table_name)
-    nav(1, 2)
+@app.route("/plots")
+def render_all_plots():
+    plots = {
+        "combined_panels": plot_combined_panels(df, ['Minutos de espera', 'Minutos de atencion', 'TotalTiempo']).to_html(full_html=False),
+        "histogram_density": plot_histogram_density(df, 'TotalTiempo', 'Densidad de Tiempo Total').to_html(full_html=False),
+        "facet_histogram": plot_facet_histogram(df, 'Minutos de espera', 'DiaSemana', 'Espera por Día de Semana').to_html(full_html=False),
+        "heatmap": plot_demand_heatmap(df, 'InicioEsperaDT', 'Sucursal', 'Demanda Promedio por Hora y Sucursal').to_html(full_html=False),
+        "avg_demand_line": plot_avg_demand_line(df, 'InicioEsperaDT', 'Sucursal', 'Demanda Promedio por Hora y Sucursal').to_html(full_html=False),
+        "bar_avg_total_time": plot_bar_avg_total_time(df).to_html(full_html=False),
+        "stacked_area": plot_stacked_area_daily_counts(df).to_html(full_html=False)
+    }
+    return render_template("plots.html", plots=plots)
 
-# ══════════════════════════ #
-# STEP 2 – OUTLIERS          #
-# ══════════════════════════ #
-elif st.session_state.step == 2:
-    st.header("2️⃣ Visualizar Outliers")
-    if st.session_state.raw_df is None:
-        st.warning("Carga primero una tabla en el paso 1."); st.stop()
-    visualizer.plot_all_variable_outliers(st.session_state.raw_df)
-    nav(1, 3)
+@app.route('/proposal', methods=['GET', 'POST'])
+def proposal():
+    # Valores por defecto
+    t_cost_full = 150.0
+    t_cost_part = 90.0
+    t_capacity = 10
 
-# ══════════════════════════ #
-# STEP 3 – LIMPIEZA          #
-# ══════════════════════════ #
-elif st.session_state.step == 3:
-    st.header("3️⃣ Limpiar Datos")
-    if st.session_state.raw_df is None:
-        st.warning("Carga primero una tabla en el paso 1."); st.stop()
-    if st.button("Aplicar limpieza"):
-        with st.spinner("Limpiando datos..."):
-            cleaned, log = cleaner.clean_data(st.session_state.raw_df)
-            st.session_state.cleaned_df = cleaned
-            st.session_state.cleaning_log = log
-            st.success("Limpieza completada ✅")
-    if st.session_state.cleaned_df is not None:
-        st.subheader("Previa de datos limpios")
-        st.dataframe(st.session_state.cleaned_df.head(), use_container_width=True)
-    nav(2, 4)
+    if request.method == 'POST':
+        t_cost_full = float(request.form.get('t_cost_full', 150.0))
+        t_cost_part = float(request.form.get('t_cost_part', 90.0))
+        t_capacity = int(request.form.get('t_capacity', 10))
 
-# ══════════════════════════ #
-# STEP 4 – REPORTE FINAL     #
-# ══════════════════════════ #
-elif st.session_state.step == 4:
-    st.header("4️⃣ Reporte Final")
-    if st.session_state.cleaned_df is None:
-        st.warning("Primero ejecuta la limpieza en el paso 3."); st.stop()
-    reporter.show_summary(
-        st.session_state.raw_df,
-        st.session_state.cleaned_df,
-        st.session_state.cleaning_log
-    )
-    nav(3, 4)
+    try:
+        df_model = load_and_preprocess()
+    except ValueError as e:
+        return f"<h2>Error en la carga de datos: {str(e)}</h2>", 500
 
-# ══════════════════════════ #
-# REINICIAR FLUJO           #
-# ══════════════════════════ #
-st.sidebar.markdown("---")
-if st.sidebar.button("🔄 Reiniciar Flujo"):
-    for k in ("step","raw_df","cleaned_df","cleaning_log","table_name"):
-        st.session_state[k] = None
-    st.rerun()
+    fig = build_figure(df_model, t_cost_full, t_cost_part, t_capacity)
+    plot_html = pio.to_html(fig, full_html=False)
+
+    return render_template('proposal.html',
+                           plot_html=plot_html,
+                           t_cost_full=t_cost_full,
+                           t_cost_part=t_cost_part,
+                           t_capacity=t_capacity)
+
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)
