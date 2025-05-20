@@ -34,6 +34,7 @@ class DataLoader:
         self._user = self._secrets.get(prefix + "USER")
         self._password = self._secrets.get(prefix + "PASSWORD")
         self._driver = self._secrets.get(prefix + "DRIVER") or "{ODBC Driver 17 for SQL Server}"
+
         self._timeout = connect_timeout
 
         # Motor para inspección de tablas
@@ -92,15 +93,18 @@ class DataLoader:
             "Encrypt=yes;TrustServerCertificate=no;"
         )
 
-        # Conexión y carga con pyodbc
-        conn = pyodbc.connect(odbc_str, timeout=self._timeout)
         try:
-            df = pd.read_sql(query, con=conn)
-        finally:
-            conn.close()
+            with pyodbc.connect(odbc_str, timeout=self._timeout) as conn:
+                df = pd.read_sql(query, con=conn)
+        except Exception as e:
+            logger.exception("Error al cargar datos de la tabla %s: %s", table, e)
+            raise
 
-        # Muestreo opcional
-        if sample_frac and 0 < sample_frac < 1:
-            df = df.sample(frac=sample_frac, random_state=42)
+        if sample_frac:
+            if 0 < sample_frac < 1:
+                df = df.sample(frac=sample_frac, random_state=42)
+            else:
+                logger.warning("sample_frac debe estar entre 0 y 1. Valor ignorado.")
+
 
         return df.reset_index(drop=True)

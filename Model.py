@@ -81,11 +81,17 @@ def build_figure(df, cost_full, cost_part, capacity):
         ndf = df[df['SUCURSAL'] == branch]
         daily = ndf.groupby([ndf['FECHA'].dt.date.rename('DIA'), 'HORA']) \
                    .size().reset_index(name='CNT')
+ 
         avg = daily.groupby('HORA')['CNT'] \
-                   .mean().reindex(range(6, 19), fill_value=0)
+           .mean().reindex(range(6, 20), fill_value=0)
 
-        full_shifts = {f'FT_{h}': list(range(h, h + 8)) for h in range(6, 13)}
-        part_shifts = {f'PT_{h}': list(range(h, h + 4)) for h in range(6, 16)}
+        min_hour = avg.index.min()
+        max_hour = avg.index.max() + 1
+
+
+        full_shifts = {f'FT_{h}': list(range(h, h + 8)) for h in range(min_hour, max_hour-7)}
+        part_shifts = {f'PT_{h}': list(range(h, h + 4)) for h in range(min_hour, max_hour-3)}
+
 
         full_sol, part_sol = optimize_staff(
             avg, full_shifts, part_shifts,
