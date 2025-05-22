@@ -61,25 +61,28 @@ def proposal():
     t_cost_full = 150.0
     t_cost_part = 90.0
     t_capacity = 10
+    max_ventanillas = 20
 
     if request.method == 'POST':
         t_cost_full = float(request.form.get('t_cost_full', 150.0))
         t_cost_part = float(request.form.get('t_cost_part', 90.0))
         t_capacity = int(request.form.get('t_capacity', 10))
+        max_ventanillas = int(request.form.get('max_ventanillas', 20))
 
     try:
         df_model = load_and_preprocess()
     except ValueError as e:
         return f"<h2>Error en la carga de datos: {str(e)}</h2>", 500
 
-    fig = build_figure(df_model, t_cost_full, t_cost_part, t_capacity)
+    fig = build_figure(df_model, t_cost_full, t_cost_part, t_capacity, max_ventanillas)
     plot_html = pio.to_html(fig, full_html=False)
 
     return render_template('proposal.html',
                            plot_html=plot_html,
                            t_cost_full=t_cost_full,
                            t_cost_part=t_cost_part,
-                           t_capacity=t_capacity)
+                           t_capacity=t_capacity,
+                           max_ventanillas=max_ventanillas)
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

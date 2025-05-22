@@ -25,7 +25,7 @@ def load_and_preprocess():
     return df
 
 
-def optimize_staff(demand, full_shifts, part_shifts, cost_full, cost_part, capacity):
+def optimize_staff(demand, full_shifts, part_shifts, cost_full, cost_part, capacity, max_ventanillas):
     """
     Optimiza la asignación de empleados full-time y part-time.
     Asegura cobertura mínima (>= demanda) y al menos un empleado en cada hora.
@@ -54,22 +54,31 @@ def optimize_staff(demand, full_shifts, part_shifts, cost_full, cost_part, capac
     cons_capacity = LinearConstraint(-A, -np.inf, -demand.values)
     # Restricción: B * x >= 1 (al menos un empleado cada hora)
     cons_min_presence = LinearConstraint(-B, -np.inf, -np.ones(T))
+    #Restricción Cantidad máxima de ventanillas
+    cons_max_ventanillas = LinearConstraint(B, -np.inf, np.full(T, max_ventanillas))
+
 
     # Resolver MILP
     res = milp(
         c=c,
-        constraints=[cons_capacity, cons_min_presence],
+        constraints=[cons_capacity, cons_min_presence, cons_max_ventanillas],
         bounds=Bounds(0, np.inf),
         integrality=np.ones(I + J, int)
     )
 
+
+    if not res.success:
+        #Devuelve None para las soluciones y un mensaje de advertencia
+        return None, None, f"ADVERTENCIA: Se necesitan más de {max_ventanillas} ventanillas para cubrir la demanda."
+
+
     x = np.round(res.x).astype(int)
     full_sol = dict(zip(full_shifts.keys(), x[:I]))
     part_sol = dict(zip(part_shifts.keys(), x[I:]))
-    return full_sol, part_sol
+    return full_sol, part_sol, None 
 
 
-def build_figure(df, cost_full, cost_part, capacity):
+def build_figure(df, cost_full, cost_part, capacity, max_ventanillas):
     branches = sorted(df['SUCURSAL'].unique())
     fig = make_subplots(
         rows=3, cols=1, shared_xaxes=True,
@@ -96,26 +105,35 @@ def build_figure(df, cost_full, cost_part, capacity):
         part_shifts = {f'PT_{h}': list(range(h, h + 4)) for h in range(min_hour, max_hour-3)}
 
 
-        full_sol, part_sol = optimize_staff(
+        full_sol, part_sol, warning_msg  = optimize_staff(
             avg, full_shifts, part_shifts,
-            cost_full, cost_part, capacity
+            cost_full, cost_part, capacity,
+            max_ventanillas
         )
+        if full_sol is None or part_sol is None:
+            # Mostrar advertencia o agregar una traza vacía para que no falle
+            print(warning_msg)
+            # Puedes crear series vacías para evitar errores más adelante
+            cov_ft = pd.Series(0, index=avg.index)
+            cov_pt = pd.Series(0, index=avg.index)
+            cost_ft = pd.Series(0.0, index=avg.index)
+            cost_pt = pd.Series(0.0, index=avg.index)
+        else:
+            cov_ft = pd.Series(0, index=avg.index)
+            cov_pt = pd.Series(0, index=avg.index)
+            cost_ft = pd.Series(0.0, index=avg.index)
+            cost_pt = pd.Series(0.0, index=avg.index)
 
-        cov_ft = pd.Series(0, index=avg.index)
-        cov_pt = pd.Series(0, index=avg.index)
-        cost_ft = pd.Series(0.0, index=avg.index)
-        cost_pt = pd.Series(0.0, index=avg.index)
-
-        for tid, n in full_sol.items():
-            for h in full_shifts[tid]:
-                if h in cov_ft.index:
-                    cov_ft[h] += n * capacity
-                    cost_ft[h] += n * cost_full
-        for tid, n in part_sol.items():
-            for h in part_shifts[tid]:
-                if h in cov_pt.index:
-                    cov_pt[h] += n * capacity
-                    cost_pt[h] += n * cost_part
+            for tid, n in full_sol.items():
+                for h in full_shifts[tid]:
+                    if h in cov_ft.index:
+                        cov_ft[h] += n * capacity
+                        cost_ft[h] += n * cost_full
+            for tid, n in part_sol.items():
+                for h in part_shifts[tid]:
+                    if h in cov_pt.index:
+                        cov_pt[h] += n * capacity
+                        cost_pt[h] += n * cost_part
 
         empleados_por_hora = pd.DataFrame({
             'Hora': avg.index,
@@ -166,7 +184,7 @@ def build_figure(df, cost_full, cost_part, capacity):
                     align='center'
                 ),
                 cells=dict(
-                    values=[empleados_por_hora[col] for col in empleados_por_hora.columns],
+                    values=[empleados_por_hora[col].tolist() for col in empleados_por_hora.columns],
                     fill_color=BG_COLOR,
                     align='center'
                 ),

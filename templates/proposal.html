@@ -203,6 +203,10 @@
           <label for="t_capacity">Capacidad (pacientes/empleado/hora)</label>
           <input type="number" name="t_capacity" id="t_capacity" value="{{ t_capacity }}">
         </div>
+        <div class="form-group">
+          <label for="max_ventanillas">Máximo número de ventanillas</label>
+          <input type="number" name="max_ventanillas" id="max_ventanillas" value="{{ max_ventanillas }}" min="1">
+        </div>
         <button type="submit">Actualizar Gráfico</button>
       </form>
     </section>
