@@ -6,6 +6,7 @@ from scipy.optimize import milp, LinearConstraint, Bounds
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from DataLoader import DataLoader
+import pulp
 
 # Paleta de colores y estilos
 PALETTE = ['#597D72', '#B59F7B', '#C8B1A3']
@@ -25,58 +26,64 @@ def load_and_preprocess():
     return df
 
 
-def optimize_staff(demand, full_shifts, part_shifts, cost_full, cost_part, capacity, max_ventanillas):
-    """
-    Optimiza la asignación de empleados full-time y part-time.
-    Asegura cobertura mínima (>= demanda) y al menos un empleado en cada hora.
-    """
-    I, J = len(full_shifts), len(part_shifts)
-    # Costos por turno
-    c = np.concatenate([np.full(I, cost_full), np.full(J, cost_part)])
-    hours = demand.index.tolist()
-    T = len(hours)
+def optimize_staff(demand, full_shifts, part_shifts, A1=100, A2=80, C=12, nmax=5):
+    hours = demand.index.tolist() #Listo
+    n_hours = len(hours)
 
-    # Matriz de capacidad (A) y presencia (B)
-    A = np.zeros((T, I + J))
-    B = np.zeros((T, I + J))
-    for i, hrs in enumerate(full_shifts.values()):
-        for t_idx, t in enumerate(hours):
-            if t in hrs:
-                A[t_idx, i] = capacity  # cobertura en pacientes
-                B[t_idx, i] = 1         # presencia de empleado
-    for j, hrs in enumerate(part_shifts.values(), start=I):
-        for t_idx, t in enumerate(hours):
-            if t in hrs:
-                A[t_idx, j] = capacity
-                B[t_idx, j] = 1
+    prob = pulp.LpProblem("StaffSchedulingWithCustomShifts", pulp.LpMinimize)
 
-    # Restricción: A * x >= demanda
-    cons_capacity = LinearConstraint(-A, -np.inf, -demand.values)
-    # Restricción: B * x >= 1 (al menos un empleado cada hora)
-    cons_min_presence = LinearConstraint(-B, -np.inf, -np.ones(T))
-    #Restricción Cantidad máxima de ventanillas
-    cons_max_ventanillas = LinearConstraint(B, -np.inf, np.full(T, max_ventanillas))
+    # Decision variables
+    v1 = {s: pulp.LpVariable(f"{s}", lowBound=0, cat="Integer") for s in full_shifts}
+    v2 = {s: pulp.LpVariable(f"{s}", lowBound=0, cat="Integer") for s in part_shifts}
+    l = {h: pulp.LpVariable(f"leak_{h}", lowBound=0, cat="Continuous") for h in hours}
 
+    # Objective: Minimize total cost
+    prob += (
+        pulp.lpSum([A1 * v1[s] for s in full_shifts]) +
+        pulp.lpSum([A2 * v2[s] for s in part_shifts])
+    ), "TotalCost"
 
-    # Resolver MILP
-    res = milp(
-        c=c,
-        constraints=[cons_capacity, cons_min_presence, cons_max_ventanillas],
-        bounds=Bounds(0, np.inf),
-        integrality=np.ones(I + J, int)
-    )
+    for t, h in enumerate(hours):
+        # Calculate coverage for hour h
+        ft_coverage = pulp.lpSum([v1[s] for s, covered in full_shifts.items() if h in covered])
+        pt_coverage = pulp.lpSum([v2[s] for s, covered in part_shifts.items() if h in covered])
+        total_coverage = ft_coverage + pt_coverage
 
+        # Constraint: max concurrent staff
+        prob += total_coverage <= nmax, f"MaxStaff_{h}"
 
-    if not res.success:
-        #Devuelve None para las soluciones y un mensaje de advertencia
-        return None, None, f"ADVERTENCIA: Se necesitan más de {max_ventanillas} ventanillas para cubrir la demanda."
+        # Constraint: leakage limited to 30% of demand
+        prob += l[h] <= 0.3 * demand[h], f"LeakageLimit_{h}"
 
+        # Flow constraint
+        if t == 0:
+            prob += l[h] == 0, f"LeakageStart_{h}"
+            prob += C * total_coverage + l[h] >= demand[h], f"DemandFlow_{h}"
+        else:
+            prev_h = hours[t - 1]
+            prob += C * total_coverage + l[h] >= demand[h] + l[prev_h], f"DemandFlow_{h}"
 
-    x = np.round(res.x).astype(int)
-    full_sol = dict(zip(full_shifts.keys(), x[:I]))
-    part_sol = dict(zip(part_shifts.keys(), x[I:]))
-    return full_sol, part_sol, None 
+        # End leakage should be zero
+        if t == len(hours) - 1:
+            prob += l[h] == 0, f"LeakageEnd_{h}"
 
+        # Optional: Ensure wait time is controlled
+        prob += 10 * C * total_coverage >= demand[h], f"WaitTime_{h}"
+
+    # Solve
+    solver = pulp.PULP_CBC_CMD(msg=False)
+    result_status = prob.solve(solver)
+    status = pulp.LpStatus[prob.status]
+
+    # Extract solution
+    if status == 'Optimal':
+        full_sol = {k: int(v1[k].varValue or 0) for k in v1}
+        part_sol = {k: int(v2[k].varValue or 0) for k in v2}
+    else:
+        full_sol = {}
+        part_sol = {}
+
+    return full_sol, part_sol, None if status == 'Optimal' else status
 
 def build_figure(df, cost_full, cost_part, capacity, max_ventanillas):
     branches = sorted(df['SUCURSAL'].unique())
